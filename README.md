@@ -1,4 +1,4 @@
-# Alpine-WSL-Dev
+# Alpine WSL Dev
 
 This repository contains instructions and scripts used to install and setup an Alpine Linux minimal root filesystem on WSL2.
 
