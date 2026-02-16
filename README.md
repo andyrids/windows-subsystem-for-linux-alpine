@@ -2,7 +2,7 @@
 
 This repository contains instructions and scripts used to install and setup an Alpine Linux minimal root filesystem on WSL2.
 
-[Alpine Linux](https://alpinelinux.org/about/) is an independent, non-commercial, general purpose Linux distribution. Alpine Linux is built around musl libc and BusyBox. This makes it small and very resource efficient. A container requires no more than 8 MB and a minimal installation to disk requires around 130 MB of storage.
+[Alpine Linux](https://alpinelinux.org/about/) is an independent, non-commercial, general purpose Linux distribution. Alpine Linux is built around musl libc and BusyBox. This makes it small and very resource efficient.
 
 ## Introduction
 
