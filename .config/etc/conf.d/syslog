@@ -1,0 +1,4 @@
+# /etc/conf.d/syslog
+# -C128: Use a 128KB circular RAM buffer
+# -S: Log to the system log
+SYSLOGD_OPTS="-C128 -S"

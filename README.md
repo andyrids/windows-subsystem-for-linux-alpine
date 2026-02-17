@@ -1,482 +1,262 @@
-# Alpine WSL Dev
+# Windows Subsystem For Linux (WSL) - Alpine
 
-This repository contains instructions and scripts used to install and setup an Alpine Linux minimal root filesystem on WSL2.
-
-[Alpine Linux](https://alpinelinux.org/about/) is an independent, non-commercial, general purpose Linux distribution. Alpine Linux is built around musl libc and BusyBox. This makes it small and very resource efficient.
-
-## Introduction
-
-This setup is used mainly for Python development on WSL, but is also used for front-end projects and embedded projects using MicroPython and C on Raspberry Pi devices, which must be attached to WSL using [usbipd-win](https://github.com/dorssel/usbipd-win).
-
-OpenRC is the init system used in alpine. The init system manages the services, such as mdev, which is the default device manager on Alpine Linux. It is provided by busybox as alternative to systemd's udev. This setup allows mdev to act as a hotplug manager and facilitates access to USB and COM devices when attached to WSL distributions, by dynamically updating `/dev` based on your mdev config rules.
-
-I prefer to use [Windows Terminal](https://apps.microsoft.com/detail/9n0dx20hk701?hl=en-US&gl=US) to manage my profiles for PowerShell and WSL distributions.
-
-<!-- [!TIP] [!IMPORTANT] [!WARNING] [!CAUTION] -->
+This repository contains a Powershell boostrap script, which automates the installation and configuration of ALpine Linux on WSL.
 
 > [!NOTE]
-> mdev is not recommended for a full blown desktop environment, but it is perfect for a minimal WSL install.
+> WIP: This repository was recently refined and updated.
 
+![Installation complete](/docs/img/alpine-linux.png)
 
-## 1. Download & install Alpine Linux
+## Features
 
-The minimal root filesystem can be downloaded from [Alpine Linux Downloads](https://alpinelinux.org/downloads/). I create a WSL directory and a subdirectory for each distribution (e.g. `C:\WSL\Alpine`), where I keep my distribution images and where I have WSL create the vhdx image files. 
+* **Alpine CDN**: Scrapes the Alpine Linux CDN & downloads the latest minirootfs tarball.
+* **Configuration**: Copies local configuration files (`.config/`) to the distro.
+* **`OpenRC`**: Configures service runlevels (`sysinit`, `boot`, `default`) for WSL.
+* **`cloud-Init`**: Provisions a default or user-defined setup.
+* **Interoperability**: Repairs symlinks for WSL tools (`wslpath`, `wslconf`, `wslinfo`).
+* **`bash`**: Configures `bash` as the default shell.
+* **`git`**: Configures `git` & leverages Windows Git Credential Manager for authentication.
+* **`fastfetch`**: Fetches system information and displays it on login, like `neofetch`.
 
-On an administrator PowerShell, Alpine can be installed using the following commands:
-
-```ps
-wsl --import Alpine C:\WSL\Alpine C:\WSL\Alpine\alpine-minirootfs-3.20.1-x86_64.tar
-```
-Check installation by listing distributions with verbose output:
-
-```ps
-wsl -l -v
-```
-
-## 2. Setup Alpine Linux
-
-I use a profile within Windows Terminal (Microsoft Store), which is set to run Alpine with the following command `C:\windows\system32\wsl.exe -d Alpine`. See here [Alpine Linux post-install guide](https://docs.alpinelinux.org/user-handbook/0.1a/Working/post-install.html) for a useful post-install guide.
-
-### New user setup
-
-New user setup - replace <username> with your username:
-
-```sh
-adduser -h /home/username -s /bin/ash username
-su -l root
-```
-
-This setup uses doas rather than sudo and is more minimal:
-
-```sh
-apk update && apk upgrade
-apk add doas
-```
-
-Add the new user to the wheel group:
-
-```sh
-echo 'permit :wheel' > /etc/doas.d/doas.conf
-adduser username wheel
-```
- 
-Microcontrollers attached to WSL are often placed in the dialout group by mdev rules (/dev/ttyACM[0-9]). The command below
-adds the user to the dialout group to facilitate connecting to these devices (if needed):
-
-```sh
-adduser username dialout
-```
-
-In Alpine, the doas.conf file is at the path `/etc/doas.d/`:
-
-```sh
-su -l username
-doas vi /etc/doas.d/doas.conf
-```
-
-Below is an example for `/etc/doas.d/doas.conf` settings, which allow a user to perform
-apk update and apk upgrade as root without a password:
-
-```sh
-# permit apk update & apk upgrade without password for user <username>
-permit nopass username as root cmd apk args update
-permit nopass username as root cmd apk args upgrade
-```
-
-Test doas config settings:
-
-```sh
-doas apk update && doas apk upgrade
-```
-
-### OpenRC, mdev & hwdrivers setup
-
-Below details installation & setup of OpenRC with mdev and hwdrivers on WSL2. mdev and OpenRC can be installed using apk:
-
-```sh
-doas apk add busybox-mdev-openrc
-```
-
-Enable mdev & hwdrivers services at the sysinit runlevel:
-
-```sh
-doas rc-update add mdev sysinit
-doas rc-update add hwdrivers sysinit
-```
-Check sysinit runlevel services:
-
-```sh
-rc-status sysinit
-```
-
-Start mdev & hwdrivers, if currently stopped:
-
-```sh
-doas rc-service mdev --ifstopped start
-doas rc-service hwdrivers --ifstopped start
-```
-
-Manually seed `/dev` with device nodes based on current mdev config file:
-
-```sh
-doas mdev -s
-```
-View changes:
-
-```sh
-ls -la /dev
-```
-
-Below is my init file for mdev at `/etc/init.d/mdev`, which I modified to run mdev as a daemon, which allowed me to
-have mdev run as a hotplug manager similar to udev. Whenever I plug in a Raspberry Pi device and share and attach it 
-to WSL, I want mdev to respond to a uevent and parse the `/etc/mdev.conf` looking for matching rules for the attached 
-device, which is usually ttyACM[0-9]. The modified line is `mdev -d` in the `_start_service` function, which replaced
-`mdev -s`.
-
-```sh
-#!/sbin/openrc-run
-
-description="the mdev device manager"
-
-depend() {
-        provide dev
-        need sysfs dev-mount
-        before checkfs fsck
-        keyword -containers -vserver -lxc
-}
-
-_start_service () {
-        ebegin "Starting busybox mdev"
-        mkdir -p /dev
-        echo >/dev/mdev.seq
-        echo "/sbin/mdev" > /proc/sys/kernel/hotplug
-        eend $?
-}
-
-_start_coldplug () {
-        ebegin "Scanning hardware for mdev"
-        # mdev -s will not create /dev/usb[1-9] devices with recent kernels
-        # so we manually trigger events for usb
-        for i in $(find /sys/devices -name 'usb[0-9]*'); do
-                [ -e $i/uevent ] && echo add > $i/uevent
-        done
-        # trigger the rest of the coldplug
-        # mdev -s is replaced with mdev -d to have it run as a daemon
-        mdev -d
-        eend $?
-}
-
-start() {
-        _start_service
-        _start_coldplug
-}
-
-stop() {
-        ebegin "Stopping busybox mdev"
-        echo > /proc/sys/kernel/hotplug
-        eend
-}
-```
-
-Below is the mdev rule in the `/etc/mdev.conf` file which is relevant to RPi Microcontrollers and probably Arduino devices:
-
-```sh
-ttyACM[0-9]     root:dialout 0660 @ln -sf $MDEV modem
-```
-
-Here is the full `/etc/mdev.conf` file and corresponding rules:
-
-```sh
-#
-# This is a sample mdev.conf.
-#
-
-# Devices:
-# Syntax: %s %d:%d %s
-# devices user:group mode
-
-$MODALIAS=.*    root:root       0660    @modprobe -q -b "$MODALIAS"
-
-# null does already exist; therefore ownership has to be changed with command
-null    root:root 0666  @chmod 666 $MDEV
-zero    root:root 0666
-full    root:root 0666
-
-random  root:root 0666
-urandom root:root 0444
-hwrandom root:root 0660
-
-console root:tty 0600
-
-# load frambuffer console when first frambuffer is found
-fb0     root:video 0660 @modprobe -q -b fbcon
-
-fd0     root:floppy 0660
-kmem    root:kmem 0640
-mem     root:kmem 0640
-port    root:kmem 0640
-ptmx    root:tty 0666
-
-# Kernel-based Virtual Machine.
-kvm             root:kvm 660
-
-# ram.*
-ram([0-9]*)     root:disk 0660 >rd/%1
-loop([0-9]+)    root:disk 0660 >loop/%1
-
-# persistent storage
-dasd.*          root:disk 0660 */lib/mdev/persistent-storage
-mmcblk.*        root:disk 0660 */lib/mdev/persistent-storage
-nbd.*           root:disk 0660 */lib/mdev/persistent-storage
-nvme.*          root:disk 0660 */lib/mdev/persistent-storage
-sd[a-z].*       root:disk 0660 */lib/mdev/persistent-storage
-sr[0-9]+        root:cdrom 0660 */lib/mdev/persistent-storage
-vd[a-z].*       root:disk 0660 */lib/mdev/persistent-storage
-xvd[a-z].*      root:disk 0660 */lib/mdev/persistent-storage
-
-md[0-9]         root:disk 0660
-
-tty             root:tty 0666
-tty[0-9]        root:root 0600
-tty[0-9][0-9]   root:tty 0660
-ttyS[0-9]*      root:dialout 0660
-ttyGS[0-9]      root:root 0660
-pty.*           root:tty 0660
-vcs[0-9]*       root:tty 0660
-vcsa[0-9]*      root:tty 0660
-
-# rpi bluetooth
-#ttyAMA0        root:tty 660 @btattach -B /dev/$MDEV -P bcm -S 115200 -N &
-
-ttyACM[0-9]     root:dialout 0660 @ln -sf $MDEV modem
-ttyUSB[0-9]     root:dialout 0660 @ln -sf $MDEV modem
-ttyLTM[0-9]     root:dialout 0660 @ln -sf $MDEV modem
-ttySHSF[0-9]    root:dialout 0660 @ln -sf $MDEV modem
-slamr           root:dialout 0660 @ln -sf $MDEV slamr0
-slusb           root:dialout 0660 @ln -sf $MDEV slusb0
-fuse            root:root  0666
-
-# mobile broadband modems
-cdc-wdm[0-9]+   root:dialout 0660
-
-# dri device
-dri/.*          root:video 0660
-card[0-9]       root:video 0660 =dri/
-
-# alsa sound devices and audio stuff
-pcm.*           root:audio 0660 =snd/
-control.*       root:audio 0660 =snd/
-midi.*          root:audio 0660 =snd/
-seq             root:audio 0660 =snd/
-timer           root:audio 0660 =snd/
-
-adsp            root:audio 0660 >sound/
-audio           root:audio 0660 >sound/
-dsp             root:audio 0660 >sound/
-mixer           root:audio 0660 >sound/
-sequencer.*     root:audio 0660 >sound/
-
-SUBSYSTEM=sound;.*      root:audio 0660
-
-# PTP devices
-ptp[0-9]        root:root 0660 */lib/mdev/ptpdev
-
-# virtio-ports
-SUBSYSTEM=virtio-ports;vport.* root:root 0600 @mkdir -p virtio-ports; ln -sf ../$MDEV virtio-ports/$(cat /sys/class/virtio-ports/$MDEV/name)
-
-# misc stuff
-agpgart         root:root 0660  >misc/
-psaux           root:root 0660  >misc/
-rtc             root:root 0664  >misc/
-
-# input stuff
-SUBSYSTEM=input;.*  root:input 0660
-
-# v4l stuff
-vbi[0-9]        root:video 0660 >v4l/
-video[0-9]+     root:video 0660 >v4l/
-
-# dvb stuff
-dvb.*           root:video 0660 */lib/mdev/dvbdev
-
-# VideoCore VC4 BCM GPU specific (as in Pi devices)
-vchiq   root:video 0660
-vcio    root:video 0660
-vcsm-cma        root:video 0660
-vc-mem  root:video 0660
-
-# load drivers for usb devices
-usb[0-9]+       root:root 0660 */lib/mdev/usbdev
-
-# net devices
-# 666 is fine: https://www.kernel.org/doc/Documentation/networking/tuntap.txt
-net/tun[0-9]*   root:netdev 0666
-net/tap[0-9]*   root:netdev 0666
-
-# zaptel devices
-zap(.*)         root:dialout 0660 =zap/%1
-dahdi!(.*)      root:dialout 0660 =dahdi/%1
-dahdi/(.*)      root:dialout 0660 =dahdi/%1
-
-# raid controllers
-cciss!(.*)      root:disk 0660 =cciss/%1
-cciss/(.*)      root:disk 0660 =cciss/%1
-ida!(.*)        root:disk 0660 =ida/%1
-ida/(.*)        root:disk 0660 =ida/%1
-rd!(.*)         root:disk 0660 =rd/%1
-rd/(.*)         root:disk 0660 =rd/%1
-
-# tape devices
-nst[0-9]+.*     root:tape 0660
-st[0-9]+.*      root:tape 0660
-
-# VirtualBox devices
-vboxguest   root:root 0600
-vboxuser    root:root 0666
-vboxdrv     root:root 0600
-vboxdrvu    root:root 0666
-vboxnetctl  root:root 0600
-
-# fallback for any!device -> any/device
-(.*)!(.*)       root:root 0660 =%1/%2
-```
-
-### WSL configuration file
-
-I configure WSL with the following config file at `/etc/wsl.conf`. I set the default WSL username under the `[user]` 
-settings and facilitate openrc starting with WSL, by using the command `command = "/sbin/openrc default"` under `[boot]`. 
-The `appendWindowsPath = true` setting under `[interop]`, allows the addition of Windows tools to be added to the WSL distro 
-`$PATH` automatically. The command `code .` would for example, be available in WSL and launch VSCode in the current working WSL 
-directory.
-
-```sh
-# /etc/wsl.conf
-[automount]
-enabled = true
-mountFsTab = true
-
-[network]
-generateHosts = true
-generateResolvConf = true
-
-[interop]
-enabled = true
-appendWindowsPath = true
-
-[user]
-default = username
-
-[boot]
-command = "/sbin/openrc default"
-```
-
-### Profile configuration
-
-When we imported this distro of Alpine Linux manually, the `/etc/profile` file overwrites the `$PATH` environment variable and therefore 
-overwrites the directories added by Windows from the aforementioned `appendWindowsPath = true` setting. I correct this by editing the 
-`/etc/profile` file. You could also add anything else to the path here such as `export PATH="$PATH:/home/username/projects/.venv-poetry/bin"`,
-which in my case, would add my Poetry package manager to the PATH.
-
-
-```sh
-# replace the existing PATH declaration:
-export PATH="$PATH"
-
-export PAGER=less
-umask 022
-
-# use nicer PS1 for bash and busybox ash
-if [ -n "$BASH_VERSION" -o "$BB_ASH_VERSION" ]; then
-        PS1='\h:\w\$ '
-# use nicer PS1 for zsh
-elif [ -n "$ZSH_VERSION" ]; then
-        PS1='%m:%~%# '
-# set up fallback default PS1
-else
-        : "${HOSTNAME:=$(hostname)}"
-        PS1='${HOSTNAME%%.*}:$PWD'
-        [ "$(id -u)" -eq 0 ] && PS1="${PS1}# " || PS1="${PS1}\$ "
-fi
-
-for script in /etc/profile.d/*.sh ; do
-        if [ -r "$script" ] ; then
-                . "$script"
-        fi
-done
-unset script
-```
-### Restart WSL 
-
-I reboot and restart Alpine linux to let the new configs take effect.
-
-With the below command, you should see mdev & hwdrivers under syinit runlevel:
-
-```sh
-rc-update show -v
-```
-
-Check mdev and hwdrivers services are started:
-
-```sh
-# should see * status: started for both services
-rc-service mdev status && rc-service hwdrivers status
-```
-
-## 3. Setup USB Device Sharing to WSL2 (Microcontrollers)
-
-I use usbipd-win to share locally connected USB devices to other machines, including Hyper-V guests and WSL 2.
-By default devices are not shared with USBIP clients. To lookup and share devices, run the following commands with 
-administrator privileges:
-
-Install usbipd-win with winget:
-```ps1
-winget install usbipd
-```
-
-List devices with busid & state information using `usbipd list` command:
-
-```ps1
-usbipd list
-```
-
-The below image shows a connected Raspberry Pi Pico W device (highlighted in blue), with MicroPython installed. Raspberry Pi Vendor ID (VID) is '0x2e8a' and the
-Product ID (PID) for MicroPython is '0x0005'. The device has been 'Shared' using the command `usbipd bind --busid 1-7`. All devices must be shared before they can be attached.
-
-![usbipd list example](images/usbipd-list.png)
-
-To share your device run the following command with the relevant busid value seen in the `usbipd list` output:
-
-```ps1
-usbipd bind --busid 1-7
-```
-![usbipd list example](images/usbipd-bind.png)
-
-As long as WSL is running, you can then attach the device to WSL using the following command:
-
-```ps1
-usbipd attach --wsl --busid 1-7
-```
-![usbipd list example](images/usbipd-attach.png)
-
-
-In Alpine Linux you can test the device is attached using the `lsusb` command and by checking that the mdev hotplug settings have been
-utilised with the following command:
-
-```sh
-ls -la /dev/ttyACM*
-```
-The below image shows the command result before and after attachment:
-
-![usbipd list example](images/alpine-ls-dev.png)
-
-## 4. Powershell Script to Automate Device Sharing to WSL2
-
-The `Watch-PicoConnect.ps1` script can be used to automate Pico attachment to WSL on connection. I run this script in an Administrator PowerShell instance using the following command:
-
-```ps1
-. .\Watch-PicoConnect.ps1
-```
-![usbipd list example](images/pico-connect-script.png)
+---
 
 > [!WARNING]
-> This script is still in development and might need tweaking for your requirements.
+> The script requires:
+> 1. `Windows 10/11` with `WSL2` enabled
+> 2. `PowerShell 5.1`/`PowerShell 7+`
+> 3. Administrative privileges
+
+## Quick Start
+
+1. Open a `PowerShell` terminal as **Administrator** and clone this repository.
+2. Run the `PowerShell` script - `. .\windows-subsystem-for-linux-alpine\Install-AlpineLinux.ps1`
+
+## Detailed Configuration Steps
+
+There can be some nuance and extra setup involved when manually installing certain distros onto WSL. This is especially true in the case of Alpine linux, which uses the `OpenRC` init system instead of the `Systemd` system and service manager. `Systemd` is fully supported by WSL, whereas `OpenRC` needs manual configuration.
+
+### Alpine Configuration Files
+
+All Linux configuration files and scripts are placed within the `.config` directory and mirror the paths within Alpine.
+
+```
+└───.config <- Alpine configuration files
+    ├───etc
+    │   │   profile   <- Fixed $PATH declaration in minirootfs default profile
+    │   │   rc.conf   <- Global OpenRC configuration
+    │   │   wsl.conf  <- Default WSL distro configuration
+    │   │
+    │   ├───apk
+    │   │       world <- Required packages for this configuration
+    │   │
+    │   ├───cloud
+    │   │   └───cloud.cfg.d
+    │   │           99_wsl.cfg <- cloud-init datasource configuration
+    │   │
+    │   ├───conf.d
+    │   │       syslog <- 128KB buffer in RAM for logs (logread)
+    │   │
+    │   ├───profile.d
+    │   │       colours.sh <- Terminal colour support script
+    │   │
+    │   └───skel <- Linux 'skeleton' directory
+    │       │   .bashrc       <- Environment variables & aliases
+    │       │   .bash_logout <- Cleans apk cache & bash history
+    │       │   .bash_profile <- Loads `.bashrc` & runs `fastfetch`
+    │       │
+    │       └───.config
+    │           └───git
+    │                   config <- Useful default `Git` config
+    │
+    ├───home
+    ├───usr
+    │   └───share
+    │       └───wsl
+    │               
+    │
+    └───var
+        └───lib
+            └───cloud
+                └───seed
+                    └───nocloud
+                            meta-data <- NoCloud datasource (default) meta-data
+                            user-data <- NoCloud datasource (default) user-data
+```
+
+### (1) Environment Validation & Download
+
+The script first checks if the `WslService` is running, enabling it if necessary. It queries the official Alpine Linux CDN to identify the latest available release for version 3.23 (e.g., 3.23.3) and downloads the minirootfs tarball (if not already downloaded). The remote SHA256 hash is compared with the downloaded tarball hash, raising a critical error on mismatch.
+
+### (2) Distribution Import
+
+The downloaded tarball is imported into WSL using `wsl.exe --import`. The default installation path is `%USERPROFILE%\WSL\Alpine`, but this can be customized via the `-InstallDirectory` parameter or when the script  asks for confirmation when ran.
+
+```ps1
+. .\windows-subsystem-for-linux-alpine\Install-AlpineLinux.ps1 -InstallDirectory "C:\WSL\Alpine"
+```
+
+![install directory](/docs/img/install-directory-check.png)
+
+### (3) Configuration Overlay
+
+The script treats the `.config` directory as the root of the Linux filesystem (/) and recursively copies all  files into the WSL instance.
+
+> [!NOTE]
+> The script converts any CRLF line-endings to LF, in case files have been modified on Windows.
+
+### (4) Package Repository Update & Upgrades
+
+The configuration overlay included an `/etc/apk/world` file, which contains each required package. The command `apk update && apk upgrade && apk fix` is executed, which updates apk repositories and upgrades existing packages. The `apk fix` command checks the world file to identify any packages that are missing and require installation.
+
+The Alpine edge community repository is added and tagged with `@edge` - e.g. `apk add fastfetch@edge`.
+
+The default packages in the `world` file:
+
+```sh
+alpine-baselayout
+alpine-keys
+alpine-release
+apk-tools
+busybox
+musl-utils
+bash
+bash-completion
+openrc
+mdevd
+cloud-init
+cloud-init-openrc
+util-linux-misc
+e2fsprogs-extra
+doas
+curl
+ca-certificates
+busybox-openrc
+openssh
+docs
+git
+fastfetch@edge
+```
+
+> [!NOTE]
+> This setup uses `doas` and not `sudo`. Check the `world` file for included packages.
+
+### (5) OpenRC Services & runlevels
+
+Alpine Linux uses the `OpenRC` init system, which is initialised through the configuration overlay `/etc/wsl.conf` file. This distro-level configuration file has `command = "/sbin/openrc default"` under the `[boot]` option, causing `OpenRC` to start correctly.
+
+The script adds required services and respective runlevels:
+
+| Runlevel | Service(s)                                                        |
+| -------- | ----------------------------------------------------------------- |
+| sysinit  | mdevd, mdevd-init, devfs                                          |
+| boot     | bootmisc, machine-id, hostname, hwclock, syslog, cloud-init-local |
+| default  | cloud-init, cloud-config, cloud-final, crond, syslog              |
+
+The command `rc-status -a` can be used to view services, status and runlevel configuration.
+
+### (6) Interoperability With WSL Tools
+
+The minirootfs lacks the correct symlinks for WSL integration tools; `wslpath`, `wslconf` and `wslinfo`. The script creates symlinks for these tools, pointing to `/init`. The `wslpath` tool is used to translate between Windows and Linux paths during configuration.
+
+### (7) Interoperability With Git For Windows
+
+On Windows, Git usually sets `credential.helper` to 'manager' which resolves to 'credential-manager' and relates to the Git Credential Manager (GCM) that ships with Git. Typically, `git.exe` is found at `C:\Program Files\Git\cmd` and GCM would therefore be found at `C:\Program Files\Git\mingw64\bin\`.
+
+The script checks to see if Git is installed on Windows and attempts to identify the GCM path. It also checks the `user.name` and `user.email` config values. The skeleton Git config (`/etc/skel/.config/git/config`) is updated with the `user.name` and `user.email` values from Windows Git config (if present) and `credential.helper` is set to the absolute WSL path to the GCM executable on Windows.
+
+This enables GCM to be used to by Git within the Alpine distro. You can still manually create SSH keys or use the `cloud-init` generated SSH keys on GitHub/GitLab etc.
+
+### (8) Terminate Distro
+
+The Alpine distro is terminated ready for a final configuration step with `cloud-init`.
+
+### (9) Cloud-Init Provisioning
+
+[`Cloud-init`](https://cloudinit.readthedocs.io/en/latest/) is the industry standard for customising cross-platform cloud instances. It is most often used by developers, system administrators and other IT professionals to automate configuration of VMs, cloud instances, or machines on a network.
+
+This configuration occurs once, on initial boot - provided `cloud-init` has been installed correctly and the init system (`OpenRC`) is aware of it.
+
+`Cloud-init` has been configured to look for two datasources - `WSL` & `NoCloud`, through a `99_wsl.cfg` config file in `/etc/cloud/cloud.cfg.d/`.
+
+Starting with the `WSL` datasource, `cloud-init` looks for a suitable user-data file in the `%USERPROFILE%\.cloud-init\` directory in the Windows system. If you create a user-data config in that directory, it wil be used in place of the fall-back `NoCloud` setup.
+
+For instructions on how to setup a user-data file for WSL, see the `cloud-init` [documentation](https://cloudinit.readthedocs.io/en/latest/reference/datasources/wsl.html) or [README.md](/%25USERPROFILE%25/.cloud-init/README.md) provided in `%USERPROFILE%/.cloud-init/`.
+
+If a suitable user-data config is not identified, `cloud-init` will use the `NoCloud` datasource config provided by the configuration overlay step. This config file is located at `\var\lib\cloud\seed\nocloud\user-data`.
+
+With the `NoCloud` datasource setup, a default 'alpine' user is created, which is added to `wheel`, `dialout` & `floppy` groups and set as the default user in `/etc/wsl.conf`.
+
+The script waits for `cloud-init` to complete its initial boot setup before continuing.
+
+### (10) update `mdevd` ttyACM Rules
+
+Next, the script fixes the ttyACM rules provided in the default `/etc/mdev.conf`. The `mdevd` package can include Regex rules that use a '+' and do not work as expected. The script replaces 'ttyACM[0-9]+' with 'ttyACM[0-9]*'.
+
+This is done to enable devices such as Raspberry Pi Pico, Arduino Uno (Rev 3+), and many STM32 boards being discovered and added to the correct device node. These devices have firmware that uses Abstract Control Model (ACM) protocol - hence ttyACM[0-9] (native USB). Without this modification, these devices miss the rules and are added to 'floppy' group.
+
+> [!NOTE]
+> I might include a default `/etc/mdev.conf` for the bootstrap.
+
+### (11) Terminate Distro
+
+The Alpine distro is terminated once again, and is now ready for use.
+
+### (12) Installation Summary
+
+The script provides a summary table for all configuration files imported into the distro and a `cloud-init` table, showing which datasource was used and any status, errors and the path of a log file.
+
+Example log:
+
+```text
+-- Boot Record 01 --
+The total time elapsed since completing an event is printed after the "@" character.
+The time the event takes is printed after the "+" character.
+
+Starting stage: init-local
+|`->no cache found @00.00400s +00.00000s
+|`->found local data from DataSourceWSL @00.01000s +00.05000s
+Finished stage: (init-local) 00.07200 seconds
+
+Starting stage: init-network
+|`->restored from cache with run check: DataSourceWSL @00.35200s +00.00200s
+|`->setting up datasource @00.36100s +00.00000s
+|`->reading and applying user-data @00.36500s +00.00600s
+|`->reading and applying vendor-data @00.37100s +00.00000s
+|`->reading and applying vendor-data2 @00.37100s +00.00000s
+|`->activating datasource @00.38600s +00.00100s
+|`->config-seed_random ran successfully and took 0.000 seconds @00.39900s +00.00000s
+|`->config-write_files ran successfully and took 0.000 seconds @00.39900s +00.00100s
+|`->config-growpart ran successfully and took 0.003 seconds @00.40000s +00.00300s
+|`->config-resizefs ran successfully and took 0.019 seconds @00.40300s +00.01900s
+|`->config-mounts ran successfully and took 0.000 seconds @00.42200s +00.00000s
+|`->config-set_hostname ran successfully and took 0.002 seconds @00.42200s +00.00200s
+|`->config-update_hostname ran successfully and took 0.000 seconds @00.42400s +00.00100s
+|`->config-users_groups ran successfully and took 0.030 seconds @00.42500s +00.03000s
+|`->config-ssh ran successfully and took 0.007 seconds @00.45500s +00.00600s
+|`->config-set_passwords ran successfully and took 0.133 seconds @00.46200s +00.13300s
+Finished stage: (init-network) 00.25400 seconds
+
+Starting stage: modules-config
+|`->config-ssh_import_id ran successfully and took 0.000 seconds @00.86600s +00.00000s
+|`->config-locale ran successfully and took 0.001 seconds @00.86600s +00.00100s
+|`->config-runcmd ran successfully and took 0.000 seconds @00.86700s +00.00000s
+Finished stage: (modules-config) 00.00800 seconds
+
+Starting stage: modules-final
+|`->config-package_update_upgrade_install ran successfully and took 10.194 seconds @01.15400s +10.19400s
+|`->config-write_files_deferred ran successfully and took 0.001 seconds @11.34800s +00.00100s
+|`->config-scripts_vendor ran successfully and took 0.000 seconds @11.34900s +00.00000s
+|`->config-scripts_per_once ran successfully and took 0.000 seconds @11.35000s +00.00000s
+|`->config-scripts_per_boot ran successfully and took 0.000 seconds @11.35000s +00.00000s
+|`->config-scripts_per_instance ran successfully and took 0.000 seconds @11.35000s +00.00000s
+|`->config-scripts_user ran successfully and took 0.002 seconds @11.35100s +00.00100s
+|`->config-ssh_authkey_fingerprints ran successfully and took 0.002 seconds @11.35200s +00.00300s
+|`->config-keys_to_console ran successfully and took 0.000 seconds @11.35500s +00.00000s
+|`->config-install_hotplug ran successfully and took 0.000 seconds @11.35500s +00.00100s
+|`->config-final_message ran successfully and took 0.004 seconds @11.35600s +00.00300s
+Finished stage: (modules-final) 10.22000 seconds
+
+Total Time: 10.55400 seconds
+
+1 boot records analyzed
+```

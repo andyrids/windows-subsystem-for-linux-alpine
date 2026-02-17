@@ -1,0 +1,49 @@
+## template: jinja
+#cloud-config
+
+{% set username = v1.distro %}
+
+locale: en_GB
+
+users:
+  - name: {{ username }}
+    gecos: "{{ v1.distro | title }} WSL User"
+    sudo: null
+    doas:
+      - "permit nopass {{ username }} as root"
+    groups: [wheel, dialout]
+    lock_passwd: true
+    shell: /bin/bash
+
+chpasswd:
+  expire: true
+ssh_pwauth: true
+  
+# Host SSH keys
+ssh_deletekeys: false
+ssh_quiet_keygen: false
+ssh_genkeytypes: [ed25519]
+ssh_publish_hostkeys:
+  enabled: true
+  blacklist: [rsa]
+
+ssh:
+  emit_keys_to_console: false
+
+package_update: true
+package_upgrade: true
+packages:
+  - vim
+ 
+write_files:
+  # ----------------------------------------------
+  # Set generated `username` as WSL default user
+  # ----------------------------------------------
+  - path: /etc/wsl.conf
+    content: |
+      [user]
+      # user created by `cloud-init`
+      default = {{ username }}
+    append: true
+runcmd:
+  - [ sh, -c, "echo 'cloud-init'" ]
