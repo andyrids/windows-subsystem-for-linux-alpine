@@ -1,22 +1,21 @@
 # Windows Subsystem For Linux (WSL) - Alpine
 
-This repository contains a Powershell boostrap script, which automates the installation and configuration of ALpine Linux on WSL.
+This repository contains a Powershell boostrap script, which automates the installation and configuration of Alpine Linux on WSL.
 
 > [!NOTE]
-> WIP: This repository was recently refined and updated.
+> **WIP**: This repository was recently refined & updated.
 
 ![Installation complete](/docs/img/alpine-linux.png)
 
 ## Features
 
 * **Alpine CDN**: Scrapes the Alpine Linux CDN & downloads the latest minirootfs tarball.
-* **Configuration**: Copies local configuration files (`.config/`) to the distro.
-* **`OpenRC`**: Configures service runlevels (`sysinit`, `boot`, `default`) for WSL.
-* **`cloud-Init`**: Provisions a default or user-defined setup.
-* **Interoperability**: Repairs symlinks for WSL tools (`wslpath`, `wslconf`, `wslinfo`).
-* **`bash`**: Configures `bash` as the default shell.
-* **`git`**: Configures `git` & leverages Windows Git Credential Manager for authentication.
-* **`fastfetch`**: Fetches system information and displays it on login, like `neofetch`.
+* **Bootstrap Configuration**: Copies local bootstrap files (`.config/`) to the distro.
+* **Configures OpenRC**: Configures service runlevels (`sysinit`, `boot`, `default`) for WSL.
+* **Configures cloud-Init**: Provisions a default or user-defined setup.
+* **Configures bash**: Configures `bash` as the default shell.
+* **Configures Git**: Mirrors Windows Git user.name/user.email & Windows Git Credential Manager.
+* **System Information**: Fetches & displays system information with `fastfetch`.
 
 ---
 
@@ -30,6 +29,10 @@ This repository contains a Powershell boostrap script, which automates the insta
 
 1. Open a `PowerShell` terminal as **Administrator** and clone this repository.
 2. Run the `PowerShell` script - `. .\windows-subsystem-for-linux-alpine\Install-AlpineLinux.ps1`
+
+> [!TIP]
+> A `justfile` is included with an `install` recipe - `just install`.
+> Install [just](https://github.com/casey/just) via `winget install --id Casey.Just --exact`.
 
 ## Detailed Configuration Steps
 
@@ -205,7 +208,7 @@ The Alpine distro is terminated once again, and is now ready for use.
 
 The script provides a summary table for all configuration files imported into the distro and a `cloud-init` table, showing which datasource was used and any status, errors and the path of a log file.
 
-Example log:
+Example log (`20260217-1126-cloud-init.log`):
 
 ```text
 -- Boot Record 01 --
