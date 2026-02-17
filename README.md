@@ -34,6 +34,8 @@ This repository contains a Powershell boostrap script, which automates the insta
 > A `justfile` is included with an `install` recipe - `just install`.
 > Install [just](https://github.com/casey/just) via `winget install --id Casey.Just --exact`.
 
+https://github.com/user-attachments/assets/a0e0db5d-edaa-4236-a31f-d42c170928f0
+
 ## Detailed Configuration Steps
 
 There can be some nuance and extra setup involved when manually installing certain distros onto WSL. This is especially true in the case of Alpine linux, which uses the `OpenRC` init system instead of the `Systemd` system and service manager. `Systemd` is fully supported by WSL, whereas `OpenRC` needs manual configuration.
@@ -263,3 +265,4 @@ Total Time: 10.55400 seconds
 
 1 boot records analyzed
 ```
+
