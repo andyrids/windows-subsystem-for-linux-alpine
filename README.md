@@ -11,11 +11,11 @@ This repository contains a Powershell bootstrap script, which automates the inst
 
 * **Alpine CDN**: Scrapes the Alpine Linux CDN & downloads the latest minirootfs tarball.
 * **Bootstrap Configuration**: Copies local bootstrap files (`.config/`) to the distro.
-* **Linux Skeleton Files**: Ensures every new user starts with default configurations.
+* **Linux Skeleton Files**: Ensures each new user starts with default dotfiles.
 * **Configures OpenRC**: Configures service runlevels (`sysinit`, `boot`, `default`) for WSL.
-* **Configures cloud-Init**: Provisions a default or user-defined setup.
+* **Configures cloud-Init**: Provisions a default (NoCloud datasource) or user-defined setup (WSL datasource).
 * **Configures bash**: Sets `bash` as the default shell.
-* **Configures Git**: Mirrors Windows Git user.name/user.email & Windows Git Credential Manager.
+* **Configures Git**: Mirrors Windows Git user.name, user.email & Windows Git Credential Manager config.
 * **System Information**: Fetches & displays system information with `fastfetch`.
 * **Volatile System Logs**: Messages from `mdevd`, `cron`, `doas` etc. are stored in RAM (`logread`).
 * **Persistent OpenRC Logs**: Messages from OpenRC regarding services are persisted (`/var/log/rc.log`).
@@ -34,8 +34,8 @@ This repository contains a Powershell bootstrap script, which automates the inst
 2. Run the `PowerShell` script - `. .\windows-subsystem-for-linux-alpine\Install-AlpineLinux.ps1`
 
 > [!TIP]
-> A `justfile` is included with an `install` recipe - `just install`.
-> Install [just](https://github.com/casey/just) via `winget install --id Casey.Just --exact`.
+> - A `justfile` is included with an `install` recipe - `just install`.
+> - Install [just](https://github.com/casey/just) via `winget install --id Casey.Just --exact`.
 
 https://github.com/user-attachments/assets/a0e0db5d-edaa-4236-a31f-d42c170928f0
 
