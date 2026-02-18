@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 #requires -RunAsAdministrator
 #requires -version 5.1
 
@@ -45,10 +45,7 @@ function Show-Header {
         $Title,
         [Parameter(Mandatory=$false)]
         [Int16]
-        $Padding=5,
-        [Parameter(Mandatory=$false)]
-        [switch]
-        $Test
+        $Padding=5
     )
     process {
         $Spacing = " ".PadLeft($Padding)
@@ -70,7 +67,6 @@ function Get-CursorPosition {
         [PSCustomObject]@{ X = [Console]::CursorLeft; Y = [Console]::CursorTop }
     }
 }
-
 
 function Show-TaskProgress {
     [CmdletBinding()]
@@ -95,25 +91,29 @@ function Show-TaskProgress {
     }
 
     function Reset-CursorPosition {
-        if ($Host.UI.RawUI.CursorPosition) {
-            $Coordinates = New-Object System.Management.Automation.Host.Coordinates(
-                0, $Host.UI.RawUI.CursorPosition.Y
-            )
-            $Host.UI.RawUI.CursorPosition = $Coordinates
-        } else {
-            # Fallback for ISE/VSCode consoles
-            Write-Host "`r" -NoNewline
+        [CmdletBinding(SupportsShouldProcess)]
+        param()
+
+        if ($PSCmdlet.ShouldProcess("Console Cursor", "Reset to Column 0")) {
+            if ($Host.UI.RawUI.CursorPosition) {
+                $Coordinates = New-Object System.Management.Automation.Host.Coordinates(
+                    0, $Host.UI.RawUI.CursorPosition.Y
+                )
+                $Host.UI.RawUI.CursorPosition = $Coordinates
+            } else {
+                # Fallback for ISE/VSCode consoles
+                Write-Host "`r" -NoNewline
+            }
         }
     }
 
-    $indent = ""
+    $Indent = ""
 
     $Status = switch ($TaskResult) {
         "NONE" { @{ Object = "[....]"; ForegroundColor = "Gray";   NoNewline = $true } }
         "OK"   { @{ Object = "[ OK ]"; ForegroundColor = "Green";  NoNewline = $true } }
         "WARN" { @{ Object = "[WARN]"; ForegroundColor = "Yellow"; NoNewline = $true } }
         "FAIL" { @{ Object = "[FAIL]"; ForegroundColor = "Red";    NoNewline = $true } }
-        
     }
 
     Reset-CursorPosition
@@ -124,6 +124,19 @@ function Show-TaskProgress {
 
 
 function Show-TaskErrorMessage {
+    <#
+    .SYNOPSIS
+        Displays an Exception message raised within a task.
+
+    .DESCRIPTION
+        Displays Exception messages raised during task execution in red.
+
+    .PARAMETER ErrorRecord
+        An `ErrorRecord` object raised during task execution.
+
+    .EXAMPLE
+        Show-TaskErrorMessage -ErrorRecord $_
+    #>
     [CmdletBinding()]
     param (
         [Parameter()]
@@ -151,8 +164,11 @@ function Invoke-Task {
     .PARAMETER Critical
         A switch causing terminal exit on task failure, if set.
 
+    .PARAMETER ToTitleCase
+        A switch causing title-case setting for `$Name`, if set.
+
     .EXAMPLE
-        Invoke-TerminateDistribution -DistroName "Alpine-3.23.3"
+        Invoke-Task -Name "Task One" -Steps @({ ... }, { ... })
     #>
     [CmdletBinding()]
     param(
@@ -219,8 +235,8 @@ function Invoke-TerminateDistribution {
         Invoke-Task -Name "Terminating $DistroName" -Critical -Steps @(
             {
                 # Force a sync inside Linux first to flush buffers
-                wsl.exe -d $DistroName /bin/sh -c "sync" 
-                
+                wsl.exe -d $DistroName /bin/sh -c "sync"
+
                 # Wait for Windows host to finalise I/O operations
                 Start-Sleep -Seconds 2
 
@@ -229,7 +245,7 @@ function Invoke-TerminateDistribution {
                     throw " - Failed to terminate $DistroName - $Log"
                 }
             }
-        )		
+        )
     }
 }
 
@@ -239,7 +255,7 @@ function Invoke-TerminateDistribution {
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $RootPath = if ($PSScriptRoot) { $PSScriptRoot } else { $PWD }
-$DEFAULT_WSL_PATH = Join-Path $env:USERPROFILE "WSL" "Alpine"
+$DEFAULT_WSL_PATH = Join-Path -Path $env:USERPROFILE -ChildPath "WSL\Alpine"
 
 Clear-Host
 Show-Header "ALPINE LINUX BOOTSTRAP"
@@ -250,7 +266,7 @@ Show-Header "ALPINE LINUX BOOTSTRAP"
 
 if ([string]::IsNullOrWhiteSpace($InstallDirectory)) {
     $InputPath = Read-Host " - Installation PATH [$DEFAULT_WSL_PATH]"
-    
+
     if ([string]::IsNullOrWhiteSpace($InputPath)) {
         $InstallDirectory = $DEFAULT_WSL_PATH
     } else {
@@ -315,11 +331,11 @@ Invoke-Task -Name "Fetching Alpine CDN information" -Critical -Steps @(
             Select-Object -ExpandProperty href -Unique
 
         $Script:LatestVersion = $Versions | Select-Object -Last 1
-        
+
         $Script:VersionString = $Script:LatestVersion |
-            Select-String -Pattern '(\d+\.\d+\.\d+)' | 
+            Select-String -Pattern '(\d+\.\d+\.\d+)' |
             ForEach-Object { $_.Matches.Groups[1].Value }
-        
+
         if (-not $Script:VersionString) { throw "Version parsing error - '$Script:LatestVersion'" }
     }
 )
@@ -370,7 +386,7 @@ Invoke-Task -Name "Importing $LatestVersion" -Critical -Steps @(
         if ($DistroList | Select-String -Pattern $DistroName) {
             throw " - '$DistroName' exists - unregister before reinstall"
         }
-        
+
         # All WSL images are named `ext4.vhdx`, so we place them in $InstallDirectory\$DistroName DIR
         $Script:ImageDirectory = New-Item -Path $InstallDirectory -Name $DistroName -ItemType "Directory" |
             Select-Object -ExpandProperty FullName
@@ -494,7 +510,7 @@ Invoke-Task -Name "Updating indexes & upgrading" -Critical -Steps @(
         # `apk fix` installs missing packages from `/etc/apk/world`
         $Log = wsl.exe -d $DistroName /bin/sh -c "apk update && apk upgrade && apk fix" 2>&1
 
-        if ($LASTEXITCODE -ne 0) { throw " - $Log" }		
+        if ($LASTEXITCODE -ne 0) { throw " - $Log" }
     }
 )
 # -----------------------------------------------------------------------------
@@ -655,7 +671,7 @@ Invoke-Task -Name "Awaiting cloud-init first-boot" -Critical -Steps @(
 
         # `Join-String` was introduced PowerShell 6.1
         $RecoverableErrors = ($Status.recoverable_errors.ERROR | Select-Object -Unique) -join "`r`n"
-        
+
         if ([string]::IsNullOrWhiteSpace($RecoverableErrors)) {
             $RecoverableErrors = "N/A"
         }
@@ -691,9 +707,9 @@ Write-Host "`n- INSTALLATION COMPLETE -`n" -ForegroundColor Green
 if ($ConfigReport.Count -gt 0) {
     $TableBootstrap = $ConfigReport |
         Format-Table -AutoSize |
-        Out-String -Stream | 
+        Out-String -Stream |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    
+
     Write-Host $TableBootstrap[0] -ForegroundColor DarkGreen
     Write-Host $TableBootstrap[1] -ForegroundColor White
 
@@ -705,9 +721,9 @@ if ($ConfigReport.Count -gt 0) {
 
     $TableCloudInit = $CIReport |
         Format-Table -AutoSize |
-        Out-String -Stream | 
+        Out-String -Stream |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    
+
     Write-Host $TableCloudInit[0] -ForegroundColor DarkGreen
     Write-Host $TableCloudInit[1] -ForegroundColor White
 
@@ -717,33 +733,3 @@ if ($ConfigReport.Count -gt 0) {
 }
 
 Write-Host "`n- Run distribution: wsl -d $DistroName -`n" -ForegroundColor Green
-
-# rc-status -a
-
-# cloud-init status --wait
-# cloud-init status --long
-# doas cloud-init status -l -w --format yaml
-# id alpine2
-# cloud-id
-
-# cat /etc/doas.conf 
-# cat /etc/passwd
-# cat /etc/wsl.conf
-# echo $0
-
-# cloud-init analyze blame
-# cloud-init analyze show
-
-# logread
-
-# cloud-init schema --system --annotate
-# cloud-init clean --logs --reboot
-
-# wsl.exe -d Alpine-3.23.3 /bin/sh -c "wslpath -u 'C:\Program Files\Git\mingw64\bin\git-credential-manager.exe'
-# $command = "printf %q '$GCM'"
-
-# $gcmPath = "${env:ProgramFiles}\Git\mingw64\bin\git-credential-manager.exe"
-# if (Test-Path $gcmPath) { Split-Path $gcmPath }
-
-# Get-ChildItem -Path "C:\Program Files\Git" -Filter "git-credential-manager.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty DirectoryName
-# New-Item -Path ".\" -Name "Logfiles" -ItemType "Directory" | Select-Object -ExpandProperty FullName
