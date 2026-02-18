@@ -1,6 +1,6 @@
 # Windows Subsystem For Linux (WSL) - Alpine
 
-This repository contains a Powershell boostrap script, which automates the installation and configuration of Alpine Linux on WSL.
+This repository contains a Powershell bootstrap script, which automates the installation and configuration of Alpine Linux on WSL.
 
 > [!NOTE]
 > **WIP**: This repository was recently refined & updated.
@@ -18,7 +18,7 @@ This repository contains a Powershell boostrap script, which automates the insta
 * **Configures Git**: Mirrors Windows Git user.name/user.email & Windows Git Credential Manager.
 * **System Information**: Fetches & displays system information with `fastfetch`.
 * **Volatile System Logs**: Messages from `mdevd`, `cron`, `doas` etc. are stored in RAM (`logread`).
-* **Persistant OpenRC Logs**: Messages from OpenRC regarding services are persisted (`/var/log/rc.log`).
+* **Persistent OpenRC Logs**: Messages from OpenRC regarding services are persisted (`/var/log/rc.log`).
 
 ---
 
@@ -133,7 +133,7 @@ openrc
 mdevd
 cloud-init
 cloud-init-openrc
-util-linux-misc
+util-linux
 e2fsprogs-extra
 doas
 curl
@@ -143,6 +143,7 @@ openssh
 docs
 git
 fastfetch@edge
+tzdata
 ```
 
 > [!NOTE]
@@ -158,7 +159,7 @@ The script adds required services and respective runlevels:
 | -------- | ----------------------------------------------------------------- |
 | sysinit  | mdevd, mdevd-init, devfs                                          |
 | boot     | bootmisc, machine-id, hostname, hwclock, syslog, cloud-init-local |
-| default  | cloud-init, cloud-config, cloud-final, crond, syslog              |
+| default  | cloud-init, cloud-config, cloud-final, crond                      |
 
 The command `rc-status -a` can be used to view services, status and runlevel configuration.
 
@@ -186,7 +187,7 @@ This configuration occurs once, on initial boot - provided `cloud-init` has been
 
 `Cloud-init` has been configured to look for two datasources - `WSL` & `NoCloud` in `/etc/cloud/cloud.cfg.d/99_wsl.cfg` config file.
 
-Starting with the `WSL` datasource, `cloud-init` looks for a suitable user-data file in the `%USERPROFILE%\.cloud-init\` directory in Windows. If you create a user-data config in that directory, it wil be used in place of the fall-back `NoCloud` setup.
+Starting with the `WSL` datasource, `cloud-init` looks for a suitable user-data file in the `%USERPROFILE%\.cloud-init\` directory in Windows. If you create a user-data config in that directory, it will be used in place of the fall-back `NoCloud` setup.
 
 For instructions on how to write a user-data file for WSL, see the `cloud-init` [documentation](https://cloudinit.readthedocs.io/en/latest/reference/datasources/wsl.html) or [README.md](/%25USERPROFILE%25/.cloud-init/README.md) provided in `%USERPROFILE%/.cloud-init/`.
 
@@ -285,4 +286,4 @@ Total Time: 10.55400 seconds
 | cloud-id                                                 | Display `cloud-init` datasource ID                            |
 | echo $0                                                  | Display current shell                                         |
 | logread                                                  | Display system messages (volatile)                            |
-| doas cat /var/log/rc.log                                 | Display OpenRC service startup/shutdown messages (persistant) |
+| doas cat /var/log/rc.log                                 | Display OpenRC service startup/shutdown messages (persistent) |

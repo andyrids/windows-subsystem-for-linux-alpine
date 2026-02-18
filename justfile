@@ -17,8 +17,8 @@ _isadmin:
 _isexecution:
 	#!pwsh.exe
 	$ExecutionPolicy = (Get-ExecutionPolicy).ToString()
-	if ($ExecutionPolicy -notin @('RemoteSigned', 'AllSigned')) {
-		Write-Host "Execution policy must be set to 'RemoteSigned' or 'AllSigned'"
+	if ($ExecutionPolicy -notin @('RemoteSigned', 'AllSigned', 'Unrestricted')) {
+		Write-Host "Execution policy must be 'RemoteSigned', 'AllSigned' or 'Unrestricted'"
 		Write-Host "Run ``Set-ExecutionPolicy AllSigned``"
 		exit 1
 	}
