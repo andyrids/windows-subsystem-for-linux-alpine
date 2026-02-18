@@ -14,7 +14,7 @@ This repository contains a Powershell boostrap script, which automates the insta
 * **Linux Skeleton Files**: Ensures every new user starts with default configurations.
 * **Configures OpenRC**: Configures service runlevels (`sysinit`, `boot`, `default`) for WSL.
 * **Configures cloud-Init**: Provisions a default or user-defined setup.
-* **Configures bash**: Configures `bash` as the default shell.
+* **Configures bash**: Sets `bash` as the default shell.
 * **Configures Git**: Mirrors Windows Git user.name/user.email & Windows Git Credential Manager.
 * **System Information**: Fetches & displays system information with `fastfetch`.
 * **Volatile System Logs**: Messages from `mdevd`, `cron`, `doas` etc. are stored in RAM (`logread`).
@@ -273,16 +273,16 @@ Total Time: 10.55400 seconds
 
 ## Debugging & Useful Commands
 
-| Command                                                    | Description                                                        |
-| ---------------------------------------------------------- | ------------------------------------------------------------------ |
-| `rc-status -a`                                             | Display `OpenRC` services & runlevel information                   |
-| `doas cloud-init status -l -w --format yaml`               | Display `cloud-init` status in YAML format                         |
-| `doas cat /var/log/cloud-init-output.log`                  | Display `cloud-init` output log                                    |
-| `doas cloud-init analyze blame`                            | Display `cloud-init` report ordered by most costly operations      |
-| `doas cloud-init analyze show`                             | Display `cloud-init` report ordered by temporal cost of operations |
-| `doas cloud-init clean --logs --reboot`                    | Remove `cloud-init` logs and re-run all stages on next boot        |
-| `doas cloud-init schema --config-file "/path/" --annotate` | Validate `cloud-init` user-data file at given path                 |
-| `cloud-id`                                                 | Display `cloud-init` datasource ID                                 |
-| `echo $0`                                                  | Display current shell                                              |
-| `logread`                                                  | Display system messages (volatile)                                 |
-| `doas cat /var/log/rc.log`                                 | Display OpenRC service startup/shutdown messages (persistant)      |
+| Command                                                  | Description                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------ |
+| rc-status -a                                             | Display `OpenRC` services & runlevel information                   |
+| doas cloud-init status -l -w --format yaml               | Display `cloud-init` status in YAML format                         |
+| doas cat /var/log/cloud-init-output.log                  | Display `cloud-init` output log                                    |
+| doas cloud-init analyze blame                            | Display `cloud-init` report ordered by most costly operations      |
+| doas cloud-init analyze show                             | Display `cloud-init` report ordered by temporal cost of operations |
+| doas cloud-init clean --logs --reboot                    | Remove `cloud-init` logs and re-run all stages on next boot        |
+| doas cloud-init schema --config-file "/path/" --annotate | Validate `cloud-init` user-data file at given path                 |
+| cloud-id                                                 | Display `cloud-init` datasource ID                                 |
+| echo $0                                                  | Display current shell                                              |
+| logread                                                  | Display system messages (volatile)                                 |
+| doas cat /var/log/rc.log                                 | Display OpenRC service startup/shutdown messages (persistant)      |
