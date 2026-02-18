@@ -11,6 +11,7 @@ This repository contains a Powershell boostrap script, which automates the insta
 
 * **Alpine CDN**: Scrapes the Alpine Linux CDN & downloads the latest minirootfs tarball.
 * **Bootstrap Configuration**: Copies local bootstrap files (`.config/`) to the distro.
+* **Linux Skeleton Files**: Ensures every new user starts with default configurations.
 * **Configures OpenRC**: Configures service runlevels (`sysinit`, `boot`, `default`) for WSL.
 * **Configures cloud-Init**: Provisions a default or user-defined setup.
 * **Configures bash**: Configures `bash` as the default shell.
@@ -90,11 +91,11 @@ All Linux configuration files and scripts are placed within the `.config` direct
 
 ### (1) Environment Validation & Download
 
-The script first checks if the `WslService` is running, enabling it if necessary. It queries the official Alpine Linux CDN to identify the latest available release for version 3.23 (e.g., 3.23.3) and downloads the minirootfs tarball (if not already downloaded). The remote SHA256 hash is compared with the downloaded tarball hash, raising a critical error on mismatch.
+The script first checks if the `WslService` is running, enabling it if necessary. It queries the official Alpine Linux CDN to identify the latest available release for version 3.23 (e.g. 3.23.3) and downloads the minirootfs tarball (if not already downloaded). The remote SHA256 hash is compared with the downloaded tarball hash, raising a critical error on mismatch.
 
 ### (2) Distribution Import
 
-The downloaded tarball is imported into WSL using `wsl.exe --import`. The default installation path is `%USERPROFILE%\WSL\Alpine`, but this can be customized via the `-InstallDirectory` parameter or when the script  asks for confirmation when ran.
+The downloaded tarball is imported into WSL using `wsl.exe --import`. The default installation path is `%USERPROFILE%\WSL\Alpine`, but this can be customized via the `-InstallDirectory` parameter or when the script  asks for confirmation.
 
 ```ps1
 . .\windows-subsystem-for-linux-alpine\Install-AlpineLinux.ps1 -InstallDirectory "C:\WSL\Alpine"
@@ -104,10 +105,10 @@ The downloaded tarball is imported into WSL using `wsl.exe --import`. The defaul
 
 ### (3) Configuration Overlay
 
-The script treats the `.config` directory as the root of the Linux filesystem (/) and recursively copies all  files into the WSL instance.
+The script treats the `.config` directory as the root of the Linux filesystem (`/`) and recursively copies all files into the Alpine distro.
 
 > [!NOTE]
-> The script converts any CRLF line-endings to LF, in case files have been modified on Windows.
+> The script converts any CRLF line-endings to LF, in case files have been modified on Windows. The `.gitattributes` file also has a `.config/** text eol=lf` setting.
 
 ### (4) Package Repository Update & Upgrades
 
@@ -115,7 +116,7 @@ The configuration overlay included an `/etc/apk/world` file, which contains each
 
 The Alpine edge community repository is added and tagged with `@edge` - e.g. `apk add fastfetch@edge`.
 
-The default packages in the `world` file:
+The current packages in the `world` file are:
 
 ```sh
 alpine-baselayout
@@ -181,15 +182,15 @@ The Alpine distro is terminated ready for a final configuration step with `cloud
 
 This configuration occurs once, on initial boot - provided `cloud-init` has been installed correctly and the init system (`OpenRC`) is aware of it.
 
-`Cloud-init` has been configured to look for two datasources - `WSL` & `NoCloud`, through a `99_wsl.cfg` config file in `/etc/cloud/cloud.cfg.d/`.
+`Cloud-init` has been configured to look for two datasources - `WSL` & `NoCloud` in `/etc/cloud/cloud.cfg.d/99_wsl.cfg` config file.
 
-Starting with the `WSL` datasource, `cloud-init` looks for a suitable user-data file in the `%USERPROFILE%\.cloud-init\` directory in the Windows system. If you create a user-data config in that directory, it wil be used in place of the fall-back `NoCloud` setup.
+Starting with the `WSL` datasource, `cloud-init` looks for a suitable user-data file in the `%USERPROFILE%\.cloud-init\` directory in Windows. If you create a user-data config in that directory, it wil be used in place of the fall-back `NoCloud` setup.
 
-For instructions on how to setup a user-data file for WSL, see the `cloud-init` [documentation](https://cloudinit.readthedocs.io/en/latest/reference/datasources/wsl.html) or [README.md](/%25USERPROFILE%25/.cloud-init/README.md) provided in `%USERPROFILE%/.cloud-init/`.
+For instructions on how to write a user-data file for WSL, see the `cloud-init` [documentation](https://cloudinit.readthedocs.io/en/latest/reference/datasources/wsl.html) or [README.md](/%25USERPROFILE%25/.cloud-init/README.md) provided in `%USERPROFILE%/.cloud-init/`.
 
-If a suitable user-data config is not identified, `cloud-init` will use the `NoCloud` datasource config provided by the configuration overlay step. This config file is located at `\var\lib\cloud\seed\nocloud\user-data`.
+If a suitable user-data config is not identified, `cloud-init` attempts the `NoCloud` datasource config provided in the bootstrap files. This config file is located at `\var\lib\cloud\seed\nocloud\user-data`.
 
-With the `NoCloud` datasource setup, a default 'alpine' user is created, which is added to `wheel`, `dialout` & `floppy` groups and set as the default user in `/etc/wsl.conf`.
+With the `NoCloud` datasource setup, a default 'alpine' user is created, which is added to `wheel`, `dialout` & `floppy` groups and set as the default user in `/etc/wsl.conf`. This user also has a 'permit nopass alpine as root' rule created for `doas`.
 
 The script waits for `cloud-init` to complete its initial boot setup before continuing.
 
@@ -202,13 +203,15 @@ This is done to enable devices such as Raspberry Pi Pico, Arduino Uno (Rev 3+), 
 > [!NOTE]
 > I might include a default `/etc/mdev.conf` for the bootstrap.
 
+I have a Python TUI (Text-based User Interface), which uses `usbipd-win` (`winget install usbipd`) to attach devices to WSL and can facilitate connections within your WSL distros. If you would prefer a TUI over the traditional CLI, the GitHub project is located at [andyrids/picolynx](https://github.com/andyrids/picolynx).
+
 ### (11) Terminate Distro
 
 The Alpine distro is terminated once again, and is now ready for use.
 
 ### (12) Installation Summary
 
-The script provides a summary table for all configuration files imported into the distro and a `cloud-init` table, showing which datasource was used and any status, errors and the path of a log file.
+The script displays a summary table for each imported bootstrap file and a `cloud-init` table, showing which datasource was used and any status, errors and the path to a log file.
 
 Example log (`20260217-1126-cloud-init.log`):
 
@@ -266,3 +269,38 @@ Total Time: 10.55400 seconds
 1 boot records analyzed
 ```
 
+## Debugging & Useful Commands
+
+| Command         | Description                                                       |
+| --------------- | ----------------------------------------------------------------- |
+| `rc-status -a`  | Displays OpenRC services & runlevel information                   |
+| doas cloud-init status -l -w --format yaml     | bootmisc, machine-id, hostname, hwclock, syslog, cloud-init-local |
+| default  | cloud-init, cloud-config, cloud-final, crond, syslog              |
+
+# cloud-init status --wait
+# cloud-init status --long
+# doas cloud-init status -l -w --format yaml
+# id alpine2
+# cloud-id
+
+# cat /etc/doas.conf 
+# cat /etc/passwd
+# cat /etc/wsl.conf
+# echo $0
+
+# cloud-init analyze blame
+# cloud-init analyze show
+
+# logread
+
+# cloud-init schema --system --annotate
+# cloud-init clean --logs --reboot
+
+# wsl.exe -d Alpine-3.23.3 /bin/sh -c "wslpath -u 'C:\Program Files\Git\mingw64\bin\git-credential-manager.exe'
+# $command = "printf %q '$GCM'"
+
+# $gcmPath = "${env:ProgramFiles}\Git\mingw64\bin\git-credential-manager.exe"
+# if (Test-Path $gcmPath) { Split-Path $gcmPath }
+
+# Get-ChildItem -Path "C:\Program Files\Git" -Filter "git-credential-manager.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty DirectoryName
+# New-Item -Path ".\" -Name "Logfiles" -ItemType "Directory" | Select-Object -ExpandProperty FullName
