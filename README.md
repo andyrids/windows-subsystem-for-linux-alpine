@@ -17,6 +17,8 @@ This repository contains a Powershell boostrap script, which automates the insta
 * **Configures bash**: Configures `bash` as the default shell.
 * **Configures Git**: Mirrors Windows Git user.name/user.email & Windows Git Credential Manager.
 * **System Information**: Fetches & displays system information with `fastfetch`.
+* **Volatile System Logs**: Messages from `mdevd`, `cron`, `doas` etc. are stored in RAM (`logread`).
+* **Persistant OpenRC Logs**: Messages from OpenRC regarding services are persisted (`/var/log/rc.log`).
 
 ---
 
@@ -271,36 +273,16 @@ Total Time: 10.55400 seconds
 
 ## Debugging & Useful Commands
 
-| Command         | Description                                                       |
-| --------------- | ----------------------------------------------------------------- |
-| `rc-status -a`  | Displays OpenRC services & runlevel information                   |
-| doas cloud-init status -l -w --format yaml     | bootmisc, machine-id, hostname, hwclock, syslog, cloud-init-local |
-| default  | cloud-init, cloud-config, cloud-final, crond, syslog              |
-
-# cloud-init status --wait
-# cloud-init status --long
-# doas cloud-init status -l -w --format yaml
-# id alpine2
-# cloud-id
-
-# cat /etc/doas.conf 
-# cat /etc/passwd
-# cat /etc/wsl.conf
-# echo $0
-
-# cloud-init analyze blame
-# cloud-init analyze show
-
-# logread
-
-# cloud-init schema --system --annotate
-# cloud-init clean --logs --reboot
-
-# wsl.exe -d Alpine-3.23.3 /bin/sh -c "wslpath -u 'C:\Program Files\Git\mingw64\bin\git-credential-manager.exe'
-# $command = "printf %q '$GCM'"
-
-# $gcmPath = "${env:ProgramFiles}\Git\mingw64\bin\git-credential-manager.exe"
-# if (Test-Path $gcmPath) { Split-Path $gcmPath }
-
-# Get-ChildItem -Path "C:\Program Files\Git" -Filter "git-credential-manager.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty DirectoryName
-# New-Item -Path ".\" -Name "Logfiles" -ItemType "Directory" | Select-Object -ExpandProperty FullName
+| Command                                                    | Description                                                        |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| `rc-status -a`                                             | Display `OpenRC` services & runlevel information                   |
+| `doas cloud-init status -l -w --format yaml`               | Display `cloud-init` status in YAML format                         |
+| `doas cat /var/log/cloud-init-output.log`                  | Display `cloud-init` output log                                    |
+| `doas cloud-init analyze blame`                            | Display `cloud-init` report ordered by most costly operations      |
+| `doas cloud-init analyze show`                             | Display `cloud-init` report ordered by temporal cost of operations |
+| `doas cloud-init clean --logs --reboot`                    | Remove `cloud-init` logs and re-run all stages on next boot        |
+| `doas cloud-init schema --config-file "/path/" --annotate` | Validate `cloud-init` user-data file at given path                 |
+| `cloud-id`                                                 | Display `cloud-init` datasource ID                                 |
+| `echo $0`                                                  | Display current shell                                              |
+| `logread`                                                  | Display system messages (volatile)                                 |
+| `doas cat /var/log/rc.log`                                 | Display OpenRC service startup/shutdown messages (persistant)      |
