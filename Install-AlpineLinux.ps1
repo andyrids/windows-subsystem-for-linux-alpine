@@ -60,6 +60,16 @@ function Show-Header {
 
 
 function Get-CursorPosition {
+    <#
+    .SYNOPSIS
+        Gets the current cursor XY position.
+
+    .DESCRIPTION
+        Gets the current cursor coordinates as an object with X & Y properties.
+
+    .EXAMPLE
+        $CursorPosition = Get-CursorPosition
+    #>
     [CmdletBinding()]
     param()
 
@@ -67,6 +77,7 @@ function Get-CursorPosition {
         [PSCustomObject]@{ X = [Console]::CursorLeft; Y = [Console]::CursorTop }
     }
 }
+
 
 function Show-TaskProgress {
     [CmdletBinding()]
@@ -209,6 +220,7 @@ function Invoke-Task {
         }
     }
 }
+
 
 function Invoke-TerminateDistribution {
     <#
