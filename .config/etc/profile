@@ -5,7 +5,7 @@ export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PAGER=less
 umask 022
 
-# use nicer PS1 for bash and busybox ash
+# Use nicer PS1 for bash and busybox ash
 if [ -n "$BASH_VERSION" -o "$BB_ASH_VERSION" ]; then
         PS1='\h:\w\$ '
 # use nicer PS1 for zsh
